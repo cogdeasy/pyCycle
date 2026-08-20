@@ -9,6 +9,7 @@ Rolls-Royce branding.
 
 import base64
 import sys
+import threading
 from pathlib import Path
 
 import matplotlib
@@ -68,7 +69,13 @@ CSS = f"""
   section[data-testid="stSidebar"] {{ background: {branding.RR_GREY};
       border-right: 1px solid {branding.RR_BORDER}; }}
   a {{ color: {branding.RR_BLUE}; }}
-  thead tr th {{ background-color: {branding.RR_BLUE} !important; color: white !important; }}
+  .rr-table {{ border-collapse: collapse; width: 100%; font-size: 0.9rem; }}
+  .rr-table th {{ background: {branding.RR_BLUE}; color: {branding.RR_WHITE};
+      text-align: right; padding: 8px 12px; font-weight: 700; }}
+  .rr-table th:first-child, .rr-table td:first-child {{ text-align: left; }}
+  .rr-table td {{ padding: 8px 12px; text-align: right;
+      border-bottom: 1px solid {branding.RR_BORDER}; }}
+  .rr-table tr:nth-child(even) td {{ background: {branding.RR_GREY}; }}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -106,9 +113,14 @@ st.markdown(
 
 @st.cache_resource(show_spinner=False)
 def get_deck(thermo_method):
+    """Build the deck once per thermodynamics package.
+
+    The OpenMDAO problem is mutated in place by every solve, so it is shared
+    behind a lock: this is a single-engine demo deck, not a multi-tenant service.
+    """
     prob = build_deck(thermo_method=thermo_method)
     prob.run_model()
-    return prob, collect(prob, 'DESIGN')
+    return prob, collect(prob, 'DESIGN'), threading.Lock()
 
 
 with st.sidebar:
@@ -125,7 +137,7 @@ with st.sidebar:
     st.caption('Physics: pyCycle high-bypass turbofan example — NASA / OpenMDAO.')
 
 with st.spinner('Building the Rolls-Royce cycle deck and solving the design point…'):
-    prob, design = get_deck(thermo)
+    prob, design, solve_lock = get_deck(thermo)
 
 
 def metric_cards(result, columns):
@@ -146,7 +158,8 @@ metric_cards(design, st.columns(5))
 
 if run_case:
     with st.spinner(f'Solving Mach {mach}, {altitude:,} ft at {throttle:.0%} throttle…'):
-        result = run_point(prob, mach, altitude, throttle)
+        with solve_lock:
+            result = run_point(prob, mach, altitude, throttle)
     st.session_state['case'] = result
 
 if 'case' in st.session_state:
@@ -163,14 +176,17 @@ if 'case' in st.session_state:
                                       ('MN', 'alt_ft', 'W_lbm_s', 'Fn_lbf', 'OPR', 'TSFC', 'BPR', 'T4_degR')}},
     ]).rename(columns={'MN': 'Mach', 'alt_ft': 'Alt (ft)', 'W_lbm_s': 'W (lbm/s)',
                        'Fn_lbf': 'Fn (lbf)', 'TSFC': 'TSFC', 'T4_degR': 'T4 (°R)'})
-    st.dataframe(table.style.format(precision=3), width='stretch')
+    st.markdown(table.to_html(index=False, float_format='{:,.3f}'.format,
+                              classes='rr-table', border=0),
+                unsafe_allow_html=True)
 
 if run_env:
     progress = st.progress(0.0, text='Solving the flight envelope…')
     results = []
-    for i, (MN, alt) in enumerate(DEFAULT_SWEEP):
-        progress.progress(i / len(DEFAULT_SWEEP), text=f'Solving Mach {MN}, {alt:,.0f} ft…')
-        results.append(run_point(prob, MN, alt, throttle))
+    with solve_lock:
+        for i, (MN, alt) in enumerate(DEFAULT_SWEEP):
+            progress.progress(i / len(DEFAULT_SWEEP), text=f'Solving Mach {MN}, {alt:,.0f} ft…')
+            results.append(run_point(prob, MN, alt, throttle))
     progress.empty()
     st.session_state['sweep'] = (results, throttle)
 
