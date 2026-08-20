@@ -1,6 +1,25 @@
 [![GitHub Actions Test Badge][1]][2]
 [![PyPI version][3]][4]
 
+<img src="docs/assets/rolls-royce-logo.png" alt="Rolls-Royce" height="72">
+
+# Rolls-Royce Engine Performance Cycle Deck
+--------------
+
+A Rolls-Royce branded demo of gas-turbine cycle analysis, built on the pyCycle
+high-bypass turbofan example. See [`rr_demo/README.md`](rr_demo/README.md) for the
+full guide.
+
+```bash
+pip install -e .[all]                        # install pyCycle
+pip install -r rr_demo/requirements.txt      # demo dependencies
+python -m rr_demo.run_demo                   # branded CLI cycle deck (~1 min)
+streamlit run rr_demo/app.py                 # branded dashboard, port 8501
+```
+
+The engine physics is unmodified upstream pyCycle (NASA / OpenMDAO); `rr_demo/`
+is a presentation layer only. Upstream documentation follows.
+
 # pyCycle
 --------------
 

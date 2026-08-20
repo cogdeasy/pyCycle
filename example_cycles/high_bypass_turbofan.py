@@ -22,7 +22,7 @@ class HBTF(pyc.Cycle):
         #Create any relavent short hands here:
         design = self.options['design']
 
-        USE_TABULAR = False
+        USE_TABULAR = self.options['thermo_method'] == 'TABULAR'
         if USE_TABULAR:
             self.options['thermo_method'] = 'TABULAR'
             self.options['thermo_data'] = pyc.AIR_JETA_TAB_SPEC
@@ -293,9 +293,17 @@ def viewer(prob, pt, file=sys.stdout):
 
 class MPhbtf(pyc.MPCycle):
 
+    def initialize(self):
+        self.options.declare('thermo_method', default='CEA', values=['CEA', 'TABULAR'],
+                             desc='Thermodynamic package used for every point in the deck')
+
+        super().initialize()
+
     def setup(self):
 
-        self.pyc_add_pnt('DESIGN', HBTF(thermo_method='CEA')) # Create an instace of the High Bypass ratio Turbofan
+        thermo_method = self.options['thermo_method']
+
+        self.pyc_add_pnt('DESIGN', HBTF(thermo_method=thermo_method)) # Create an instace of the High Bypass ratio Turbofan
 
         self.set_input_defaults('DESIGN.inlet.MN', 0.751)
         self.set_input_defaults('DESIGN.fan.MN', 0.4578)
@@ -353,13 +361,13 @@ class MPhbtf(pyc.MPCycle):
         self.od_Fn_target = [5500.0, 5300]
         self.od_dTs = [0.0, 0.0]
 
-        self.pyc_add_pnt('OD_full_pwr', HBTF(design=False, thermo_method='CEA', throttle_mode='T4'))
+        self.pyc_add_pnt('OD_full_pwr', HBTF(design=False, thermo_method=thermo_method, throttle_mode='T4'))
 
         self.set_input_defaults('OD_full_pwr.fc.MN', 0.8)
         self.set_input_defaults('OD_full_pwr.fc.alt', 35000, units='ft')
         self.set_input_defaults('OD_full_pwr.fc.dTs', 0., units='degR')
 
-        self.pyc_add_pnt('OD_part_pwr', HBTF(design=False, thermo_method='CEA', throttle_mode='percent_thrust'))
+        self.pyc_add_pnt('OD_part_pwr', HBTF(design=False, thermo_method=thermo_method, throttle_mode='percent_thrust'))
 
         self.set_input_defaults('OD_part_pwr.fc.MN', 0.8)
         self.set_input_defaults('OD_part_pwr.fc.alt', 35000, units='ft')
